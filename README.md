@@ -39,3 +39,6 @@ Easily configurable job limits
 Permission-based job removal
 
 Framework auto-detection
+
+Preview: 
+<img width="1536" height="1024" alt="thumbbymyass" src="https://github.com/user-attachments/assets/f4702f93-9088-4360-bf20-252251b49b1c" />
