@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S6LA</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="dark">
+    <div id="root"></div>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+
+        let errorHandlerActive = false;
+        window.addEventListener('error', function(e) {
+            if (errorHandlerActive) return;
+            if (e.message && (
+                e.message.includes('source map') ||
+                e.message.includes('.map') ||
+                e.message.includes('Unsupported URL scheme') ||
+                e.message.includes('nui://')
+            )) {
+                errorHandlerActive = true;
+                e.preventDefault();
+                errorHandlerActive = false;
+                return false;
+            }
+        }, true);
+
+        let parent_resource_name = 's6la_multijob';
+        try {
+            if (typeof window.invokeNative === 'function') {
+                if (typeof window.GetParentResourceName === 'function') {
+                    const native_fn = window.GetParentResourceName;
+                    parent_resource_name = native_fn();
+                } else {
+                    parent_resource_name = window.location.hostname === 'localhost' ? 's6la_multijob' : window.location.hostname;
+                }
+            }
+        } catch (e) {
+        }
+        
+        function GetParentResourceName() {
+            return parent_resource_name;
+        }
+
+        function App() {
+            const [isVisible, setIsVisible] = useState(false);
+            const [currentJobs, setCurrentJobs] = useState([]);
+            const [currentJob, setCurrentJob] = useState(null);
+            const [jobIcons, setJobIcons] = useState({});
+            const [isMenuOpen, setIsMenuOpen] = useState(false);
+            const [activeTab, setActiveTab] = useState('jobs');
+            const [pendingDelete, setPendingDelete] = useState(null);
+            const is_visible_ref = React.useRef(false);
+            
+            useEffect(() => {
+                is_visible_ref.current = isVisible;
+                try {
+                    if (isVisible) {
+                        document.body.style.display = 'block';
+                    } else {
+                        document.body.style.display = 'none';
+                    }
+                } catch (e) {
+                }
+            }, [isVisible]);
+            
+            useEffect(() => {
+                const isInBrowser = typeof window.invokeNative !== 'function';
+                
+                if (isInBrowser) {
+                    setIsVisible(true);
+                    return;
+                }
+                
+                const message_handler = (event) => {
+                    if (event.data && event.data.type === 'open') {
+                        setIsVisible(true);
+                        if (event.data.jobIcons) {
+                            setJobIcons(event.data.jobIcons);
+                        }
+                    } else if (event.data && event.data.type === 'close') {
+                        setIsVisible(false);
+                        setIsMenuOpen(false);
+                        setActiveTab('jobs');
+                        setPendingDelete(null);
+                    } else if (event.data && event.data.action === 'updateJobs') {
+                        setCurrentJobs(event.data.jobs || []);
+                        setCurrentJob(event.data.currentJob || null);
+                        if (event.data.jobIcons) {
+                            setJobIcons(event.data.jobIcons);
+                        }
+                    }
+                };
+                
+                window.addEventListener('message', message_handler);
+                
+                return () => {
+                    window.removeEventListener('message', message_handler);
+                };
+            }, []);
+            
+            useEffect(() => {
+                const isInBrowser = typeof window.invokeNative !== 'function';
+                if (isInBrowser) return;
+                
+                const key_handler = (event) => {
+                    if ((event.key === 'Escape' || event.keyCode === 27) && is_visible_ref.current) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setIsVisible(false);
+                        setIsMenuOpen(false);
+                        setActiveTab('jobs');
+                        setPendingDelete(null);
+                        fetch(`https://${GetParentResourceName()}/close`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({})
+                        }).catch(() => {});
+                    }
+                };
+                
+                window.addEventListener('keydown', key_handler);
+                
+                return () => {
+                    window.removeEventListener('keydown', key_handler);
+                };
+            }, []);
+
+            const get_job_icon = (job_name) => {
+                const icon = jobIcons[job_name.toLowerCase()];
+                return icon || 'fa-briefcase';
+            };
+
+            const select_job = (job_name) => {
+                if (job_name === 'unemployed' || job_name === 'OFFDUTY') {
+                    fetch(`https://${GetParentResourceName()}/selectJob`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ job: 'unemployed' })
+                    });
+                } else {
+                    fetch(`https://${GetParentResourceName()}/selectJob`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ job: job_name })
+                    });
+                }
+            };
+
+            const show_confirm = (job_name, job_label) => {
+                setPendingDelete({ jobName: job_name, jobLabel: job_label });
+            };
+
+            const close_confirm = () => {
+                setPendingDelete(null);
+            };
+
+            const confirm_delete = () => {
+                if (pendingDelete) {
+                    fetch(`https://${GetParentResourceName()}/removeJob`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ job: pendingDelete.jobName })
+                    });
+                    close_confirm();
+                }
+            };
+
+            const toggleMenu = () => {
+                setIsMenuOpen(prev => !prev);
+            };
+
+            const toggleTheme = () => {
+                const body = document.body;
+                const currentTheme = body.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                body.setAttribute('data-theme', newTheme);
+                localStorage.setItem('multijob-theme', newTheme);
+            };
+
+            const switchToJobs = () => {
+                setActiveTab('jobs');
+                setIsMenuOpen(false);
+            };
+
+            const switchToSettings = () => {
+                setActiveTab('settings');
+            };
+
+
+            useEffect(() => {
+                const savedTheme = localStorage.getItem('multijob-theme') || 'dark';
+                document.body.setAttribute('data-theme', savedTheme);
+            }, []);
+
+            if (!isVisible) return null;
+
+            const unemployed_job = {
+                job_name: 'unemployed',
+                job_label: 'Unemployed',
+                grade: 0,
+                grade_label: '',
+                salary: 0
+            };
+
+            const is_unemployed = !currentJob || currentJob.name === 'unemployed';
+            
+            let all_jobs = [unemployed_job, ...currentJobs];
+            if (currentJob && currentJob.name && currentJob.name !== 'unemployed') {
+                const job_exists = currentJobs.some(job => (job.job_name || job.name) === currentJob.name);
+                if (!job_exists) {
+                    all_jobs = [
+                        unemployed_job,
+                        {
+                            job_name: currentJob.name,
+                            job_label: currentJob.label || currentJob.name,
+                            grade: currentJob.grade || 0,
+                            grade_label: currentJob.grade_label || '',
+                            salary: currentJob.salary || 0
+                        },
+                        ...currentJobs
+                    ];
+                }
+            }
+
+            return (
+                <div className="job-container">
+                    <div className="job-wrapper">
+                        <div className="job-header">
+                            <div className={`header-tabs ${isMenuOpen ? 'justify-start' : ''}`}>
+                                <button 
+                                    className={`header-tab ${activeTab === 'jobs' ? 'active' : ''}`}
+                                    onClick={switchToJobs}
+                                >
+                                    <i className="fas fa-briefcase"></i>
+                                    MY JOBS
+                                </button>
+                                {isMenuOpen && (
+                                    <button 
+                                        className={`header-tab ${activeTab === 'settings' ? 'active' : ''}`}
+                                        onClick={switchToSettings}
+                                    >
+                                        <i className="fas fa-cog"></i>
+                                        SETTINGS
+                                    </button>
+                                )}
+                            </div>
+                            <button 
+                                className={`menu-toggle ${isMenuOpen ? 'active' : ''}`}
+                                onClick={toggleMenu}
+                            >
+                                <i className="fas fa-bars"></i>
+                            </button>
+                        </div>
+
+                        {activeTab === 'jobs' && (
+                            <div className="tab-content">
+                                <div className="job-list">
+                                    {all_jobs.map((job, index) => {
+                                        const job_name = job.job_name || job.name || 'unemployed';
+                                        const is_selected = job_name === 'unemployed' ? is_unemployed : (currentJob && currentJob.name === job_name);
+                                        const is_unemployed_item = job_name === 'unemployed';
+                                        const icon = get_job_icon(job_name);
+                                        const grade_label = job.grade_label || '';
+                                        const salary = job.salary || 0;
+
+                                        return (
+                                            <div 
+                                                key={job_name}
+                                                className={`job-item ${is_unemployed_item ? 'offduty' : ''} ${is_selected ? 'selected' : ''}`}
+                                                style={{ animationDelay: `${index * 0.05}s` }}
+                                            >
+                                                <div className="job-content">
+                                                    <div className="job-info">
+                                                        <div className="job-icon">
+                                                            <i className={`fas ${icon}`}></i>
+                                                        </div>
+                                                        <div className="job-details">
+                                                            <h3>{job.job_label || job.label || job_name}</h3>
+                                                            {grade_label && <p>{grade_label}</p>}
+                                                        </div>
+                                                    </div>
+                                                    <div className="job-actions">
+                                                        {!is_unemployed_item && (
+                                                            <button 
+                                                                className="btn-delete"
+                                                                onClick={() => show_confirm(job_name, job.job_label || job_name)}
+                                                            >
+                                                                <i className="fas fa-trash"></i>
+                                                            </button>
+                                                        )}
+                                                        <button 
+                                                            className={`btn-select ${is_selected ? 'selected' : ''}`}
+                                                            onClick={() => select_job(job_name)}
+                                                        >
+                                                            {is_selected ? <><i className="fas fa-check"></i></> : 'SELECT'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'settings' && (
+                            <div className="tab-content">
+                                <div className="settings-list">
+                                    <div className="setting-item">
+                                        <span className="setting-label">Dark Mode</span>
+                                        <div 
+                                            className={`toggle-switch ${document.body.getAttribute('data-theme') === 'dark' ? 'active' : ''}`}
+                                            onClick={toggleTheme}
+                                            style={{ cursor: 'pointer' }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {pendingDelete && (
+                        <div className="confirm-overlay active" onClick={close_confirm}>
+                            <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+                                <h3>Remove Job</h3>
+                                <p>Are you sure you want to remove "{pendingDelete.jobLabel}" from your jobs?</p>
+                                <div className="confirm-actions">
+                                    <button className="confirm-btn cancel" onClick={close_confirm}>Cancel</button>
+                                    <button className="confirm-btn confirm" onClick={confirm_delete}>Remove</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
