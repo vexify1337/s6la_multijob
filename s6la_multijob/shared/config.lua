@@ -7,7 +7,7 @@ Config.frameworks = {
 
 Config.detection_delay = 100
 
-Config.command = 'multijob'
+Config.command = 'multijob' -- default keybind is f9
 
 
 -- just the icons that sit next to the job name in the ui so if you have more jobs add them here, find the right thing here  https://fontawesome.com/icons
@@ -22,3 +22,4 @@ Config.job_icons = {
     ['reporter'] = 'fa-microphone',
     ['realestate'] = 'fa-house'
 }
+
