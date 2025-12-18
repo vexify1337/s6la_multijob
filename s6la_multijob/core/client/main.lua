@@ -154,7 +154,7 @@ RegisterNUICallback('removeJob', function(data, cb)
     TriggerServerEvent('s6la_multijob:remove_job', data.job)
     cb('ok')
 end)
-
+-- dont ask why i did this... we had some react issues and we love react being react...
 RegisterNUICallback('error', function(data, cb)
     if data and data.message then
         print('^1[NUI Error]^7 ' .. tostring(data.message))
@@ -176,3 +176,4 @@ RegisterCommand(Config.command, function()
 end, false)
 
 RegisterKeyMapping(Config.command, 'Open MultiJob Menu', 'keyboard', 'F9')
+
