@@ -42,3 +42,6 @@ Permission-based job removal
 Framework auto-detection
 
 
+
+## /multijob or f9 to open the ui.
+
